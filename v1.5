@@ -1,0 +1,192 @@
+#include <SPI.h>
+#include "HTU21D.h"
+#include <ESP8266WiFi.h> 
+#include <BlynkSimpleEsp8266.h>
+#include <DFPlayer_Mini_Mp3.h>
+#include <SoftwareSerial.h>
+#include <SimpleTimer.h> //here is the SimpleTimer library
+SimpleTimer timer;
+
+
+HTU21D myHumidity;
+SoftwareSerial mp3Serial(D5, D6); // RX, TX
+
+//pin setup
+const int vent1Pin = 16; //bath vent
+const int vent2Pin = 2; // toilet vent
+const int buttonVent = 15;//vent button
+const int playbutton =3; //mp3 play/next
+const int stopbutton =1; //mp3 stop
+const int rsens = 0; //rain sensor pin
+
+
+//const
+int humSet;
+int vent1Timer = 100;
+int vent2Timer = 0;
+int mp3Timer = 180000;
+
+unsigned long vent1OnTime;
+unsigned long vent2OnTime;
+unsigned long mp3OnTime; 
+
+bool vent1On;
+bool vent2On;
+bool mp3On;
+
+//led widget
+WidgetLED led2(V6);
+WidgetLED led1(V7);
+WidgetLED led3(V8);
+WidgetLED led4(V11);
+
+//Variables:
+float hum;
+float temp;
+
+//blynk auth
+char auth[] = "GSzoeA7v1k6pJUdYMk5o_pBkCYzjI9Sd";
+char ssid[] = "fuckyou";
+char pass[] = "80679767510";
+//char ipserv[] = "91.196.102.90";
+
+
+
+//widget read
+//BLYNK_WRITE(2){
+  //mp3Timer = param.asInt();  
+//}
+
+BLYNK_WRITE(3){
+  humSet = param.asInt(); 
+}  
+BLYNK_WRITE(4){
+  vent1Timer = param.asInt();
+ }
+ BLYNK_WRITE(5){
+  vent2Timer = param.asInt();
+ }
+
+//bathroom hum\temp sensor
+void gy21(){
+hum = myHumidity.readHumidity();
+temp = myHumidity.readTemperature();  
+
+Serial.print(" Temperature:");
+Serial.print(temp, 1);
+Serial.print("C");
+Serial.print(" Humidity:");
+Serial.print(hum, 1);
+Blynk.virtualWrite(V9, hum);
+Blynk.virtualWrite(V10, temp);
+}
+
+//bathroom vent
+void vent1(){
+   if (hum > humSet){
+   digitalWrite(vent1Pin, LOW);
+   vent1On = true;
+   vent1OnTime = millis(); 
+   led1.on();
+ }
+   if(vent1On=true)
+   if(millis() - vent1OnTime > vent1Timer){
+   digitalWrite(vent1Pin, HIGH); 
+   led1.off();
+   vent1On = false;      
+ } 
+}
+
+//toilet vent
+void vent2(){
+   if (digitalRead(buttonVent)==HIGH){
+   digitalWrite(vent2Pin, LOW);
+   vent2On = true;
+   vent2OnTime = millis(); 
+   led2.on();
+
+}
+   if(vent2On=true)
+   if(millis() - vent2OnTime > vent2Timer){
+   digitalWrite(vent2Pin, HIGH); 
+   led2.off();
+   vent2On = false;      
+
+ } 
+}
+//mp3
+void mp3(){
+  if (digitalRead(playbutton)==HIGH){
+   mp3_next ();
+   mp3On = true;
+   mp3OnTime = millis(); 
+   led3.on();
+ }
+  if(mp3On=true)
+   if(millis() - mp3OnTime > mp3Timer){
+   mp3_stop ();
+   led3.off();
+   mp3On = false;
+ }
+  if(digitalRead(stopbutton)==HIGH){
+   mp3_stop();
+   led3.off();
+   mp3On= false;       
+ }  
+}
+void rsensor(){
+  if(digitalRead(rsens)==LOW){
+  led4.on();
+  }
+  else{
+    led4.off();
+  }
+}
+void setup() {
+Serial.begin(9600);// serial int
+
+//mp3 set
+mp3Serial.begin (9600); //mp3 serial int
+mp3_set_serial (mp3Serial);
+delay(1000);  
+mp3_set_volume (25); //volume
+
+myHumidity.begin(); 
+Blynk.begin(auth, ssid, pass);
+//Blynk.begin(auth, ssid, pass, ipserv, 8012);
+
+//timers
+timer.setInterval(10000, gy21);
+timer.setInterval(10000, vent1);
+timer.setInterval(100, vent2);
+timer.setInterval(100, mp3);
+timer.setInterval(10000, rsensor);
+
+//pimode
+pinMode(vent1Pin,OUTPUT);
+pinMode(vent2Pin,OUTPUT);
+pinMode(playbutton,INPUT);
+pinMode(stopbutton,INPUT);
+pinMode(buttonVent,INPUT);
+pinMode(rsens,INPUT);
+digitalWrite(vent1Pin,HIGH);
+digitalWrite(vent2Pin,HIGH);
+digitalWrite(buttonVent,LOW);
+digitalWrite(playbutton,LOW);
+
+//flags
+vent1On = false;
+vent2On = false;
+mp3On = false;
+}
+
+BLYNK_CONNECTED(){
+  Blynk.syncAll();
+}
+
+void loop() {
+  
+Blynk.run(); 
+timer.run(); 
+
+}
